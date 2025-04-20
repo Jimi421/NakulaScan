@@ -1,0 +1,3 @@
+scanme.nmap.org
+8.8.8.8
+google.com
