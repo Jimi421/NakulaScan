@@ -29,27 +29,15 @@ It blends intelligent stealth scanning with clean reporting and adaptive behavio
    cd NakulaScan/core
 Install requirements:
 
-bash
-Copy
-Edit
 pip install tqdm scapy
 Example stealth scan:
 
-bash
-Copy
-Edit
 sudo python3 nakulascan.py -t 192.168.1.5 -p common -s stealth
 Example multi-target scan:
 
-bash
-Copy
-Edit
 sudo python3 nakulascan.py -T ../examples/targets.txt -p full -s whisper
 View generated reports under:
 
-bash
-Copy
-Edit
 /reports/
 🛡️ Usage Options
 
@@ -79,8 +67,7 @@ Built to survive real-world defenses while maintaining operator integrity.
 📚 Example Target File
 Example targets.txt:
 
-Copy
-Edit
+
 192.168.1.5
 10.10.10.10
 scanme.nmap.org
@@ -103,4 +90,6 @@ Stay disciplined. Move wisely. Remain unseen.
 🛡️ License
 This project is licensed under the MIT License.
 For ethical and educational purposes only.
+
+
 
