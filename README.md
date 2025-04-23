@@ -1,95 +1,98 @@
-# NakulaScan
-🛡️ **NakulaScan - Stealth Reconnaissance Platform**
+# 🛡️ NakulaScan v2.6 - Red Team Stealth Recon Tool
 
-NakulaScan is a lightweight, stealth-optimized reconnaissance tool designed for ethical Red Team operations, CTF challenges, and cybersecurity learning.  
-It blends intelligent stealth scanning with clean reporting and adaptive behaviors to survive real-world network defenses.
+**NakulaScan** is a precision-crafted, stealth-optimized reconnaissance tool built for Red Team operations, CTF challenges, and cybersecurity mastery.
+
+Inspired by the warrior Nakula — precise, silent, and deeply disciplined — this tool is designed for clean execution, low detection, and high clarity.
 
 ---
 
 ## 🌟 Features
 
-- ✅ Asynchronous multi-target TCP & UDP stealth scanning
-- ✅ Whisper, Stealth, Fast, Aggressive speed profiles
-- ✅ Automatic packet fragmentation option
-- ✅ Passive OS fingerprinting (TTL analysis)
-- ✅ Banner grabbing from open services
-- ✅ Crash-resilient autosaving mid-scan
-- ✅ Beautiful HTML, Markdown, and JSON report generation
-- ✅ Operator codename generation for session tracking
-- ✅ Colorized CLI with nested progress bars
-- ✅ Adaptive stealth behaviors (dynamic timing, packet noise)
+- ✅ Asynchronous TCP scanning with threading
+- ✅ **FIN / NULL / XMAS** stealth scan modes (NEW in v2.6)
+- ✅ TTL randomization for passive OS fingerprint obfuscation
+- ✅ Threaded banner grabbing for service detection
+- ✅ Output: JSON report with port, banner, guessed OS, and scan type
+- ✅ Operator codename + CLI with optional ASCII banner
+- ✅ Clean CLI output with optional `--nobanner` flag
 
 ---
 
 ## ⚡ Quick Start
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/NakulaScan.git
-   cd NakulaScan/core
-Install requirements:
+### 🔹 Scan a Single Target (Common Ports)
 
-pip install tqdm scapy
-Example stealth scan:
-
-sudo python3 nakulascan.py -t 192.168.1.5 -p common -s stealth
-Example multi-target scan:
-
-sudo python3 nakulascan.py -T ../examples/targets.txt -p full -s whisper
-View generated reports under:
-
-/reports/
-🛡️ Usage Options
-
-Option	Description
--t / --target	Single target IP or hostname
--T / --targetlist	File containing list of targets
--p / --ports	Port set: common, full, or custom (22,80,443)
--c / --custom	Comma-separated ports (if -p custom)
--s / --speed	Scan speed: whisper, stealth, fast, aggressive
--u / --udp	Include UDP scan (optional)
--f / --fragment	Enable packet fragmentation for stealth
-🧠 Philosophy
-"He who moves without being seen is the truest warrior." — Nakula
-
-NakulaScan is designed with the Red Team mindset:
-
-Patience > Speed
-
-Stealth > Noise
-
-Precision > Chaos
-
-Intelligence > Brute Force
-
-Built to survive real-world defenses while maintaining operator integrity.
-
-📚 Example Target File
-Example targets.txt:
+```bash
+sudo python3 nakulascan.py -t 192.168.1.5
+🔹 Scan Multiple Targets from a File
+bash
+Copy
+Edit
+sudo python3 nakulascan.py -T targets.txt -p full
+🔐 Stealth Scan Modes (v2.6)
+Use stealthy TCP packet scans that avoid full handshakes, ideal for evading IDS/IPS.
 
 
-192.168.1.5
+Scan Mode	Description
+--scan fin	Sends TCP packets with only the FIN flag
+--scan null	Sends TCP packets with no flags
+--scan xmas	Sends FIN + PSH + URG flags (XMAS tree scan)
+Example:
+bash
+Copy
+Edit
+sudo python3 nakulascan.py -t 10.10.10.5 -p common --scan fin
+🧠 Passive OS Guessing
+TTL of 64 → Linux
+
+TTL of 128 → Windows
+
+Result shown inline and in JSON output
+
+📄 Output Sample (JSON)
+json
+Copy
+Edit
+{
+  "ip": "192.168.1.5",
+  "port": 22,
+  "status": "open",
+  "service": "SSH",
+  "banner": "OpenSSH_8.2p1 Ubuntu",
+  "os_guess": "Linux",
+  "scan_type": "FIN"
+}
+📁 Example Target File
+Just a simple list:
+
+Copy
+Edit
+192.168.1.1
 10.10.10.10
 scanme.nmap.org
-Place your targets in a simple list, one per line.
+🛠️ Usage Flags Summary
 
-📈 Future Expansion Roadmap
-✨ Advanced OS fingerprinting engine (expand on TTL/WindowSize)
+Flag	Description
+-t	Target IP or hostname
+-T	File of multiple targets
+-p	common or full ports
+--scan	Stealth mode: fin, null, or xmas
+--nobanner	Disable ASCII banner output
+🧭 Philosophy
+"He who moves without being seen is the truest warrior." — Nakula
 
-✨ Integrated vulnerability suggestion mode (offline CVE matching)
+NakulaScan prioritizes:
 
-✨ Scan resume from JSON state files
+🕶️ Stealth over speed
 
-✨ Full HTML dashboard reporting
+🎯 Precision over chaos
 
-🔥 Operator Closing Thought
-NakulaScan is a reminder:
-True strength lies not in noise — but in silent mastery.
-Stay disciplined. Move wisely. Remain unseen.
+💡 Discipline over noise
 
 🛡️ License
-This project is licensed under the MIT License.
-For ethical and educational purposes only.
+MIT License
+This tool is for ethical and educational use only.
 
-
-
+🔥 Closing Thought
+True strength lies not in noise — but in silent mastery.
+“ॐ Tat Sat.” — Nakula
