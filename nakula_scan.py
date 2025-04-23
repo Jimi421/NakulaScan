@@ -1,227 +1,174 @@
-#!/usr/bin/env python3
-# NakulaScan - Stealth Reconnaissance Platform
+# NakulaScan v2.6 - Stealth Engine Core
 
-import asyncio
 import argparse
 import socket
 import random
+import threading
+import time
 import json
-import os
-from tqdm import tqdm
 from datetime import datetime
-from scapy.all import IP, TCP, UDP, sr1, fragment
+from scapy.all import *
 
-# CLI Colors
-GREEN = "\033[92m"
+conf.verb = 0
+
+# Color definitions
 RED = "\033[91m"
+GREEN = "\033[92m"
 CYAN = "\033[96m"
 RESET = "\033[0m"
 
-# Dynamic Codename
-def generate_codename():
-    names = ["SilentFalcon", "ShadowWolf", "PhantomEagle", "DarkCobra", "SwiftViper"]
-    return random.choice(names) + str(random.randint(10, 99))
-
-codename = generate_codename()
-scan_start_time = datetime.now()
-
-# Print Banner
-print(f"{CYAN}[+] Operator Codename: {codename} {RESET}")
-print(f"{CYAN}[+] Tip: Run with -h or --help to see full usage instructions! {RESET}\n")
-
-# Argument Parser
-parser = argparse.ArgumentParser(
-    description=f"NakulaScan - Stealth Recon ({codename})",
-    epilog="""
-🛡️ Quick Usage Examples:
-
-▶️ Scan one target stealthily:
-    python3 nakulascan.py -t 192.168.1.5 -p common -s stealth
-
-▶️ Scan multiple targets from a file:
-    python3 nakulascan.py -T examples/targets.txt -p custom -c 22,80,443 -s fast
-
-▶️ Whisper Mode for extreme stealth:
-    python3 nakulascan.py -t 10.10.10.10 -p full -s whisper
-"""
-)
-target_group = parser.add_mutually_exclusive_group(required=True)
-target_group.add_argument("-t", "--target", help="Target IP address or hostname")
-target_group.add_argument("-T", "--targetlist", help="File containing list of targets")
-
-parser.add_argument("-p", "--ports", default="common", help="Ports to scan: common, full, or comma-separated (22,80,443)")
-parser.add_argument("-c", "--custom", help="Custom ports (if -p custom is selected)")
-parser.add_argument("-s", "--speed", choices=["whisper", "stealth", "fast", "aggressive"], default="stealth", help="Scan speed profile")
-parser.add_argument("-u", "--udp", action="store_true", help="Include UDP scanning")
-parser.add_argument("-f", "--fragment", action="store_true", help="Enable packet fragmentation for stealth")
-
-args = parser.parse_args()
-
-# Stealth Timing Profiles
-speed_profiles = {
-    "whisper": (5.0, 10.0),
-    "stealth": (0.5, 2.0),
-    "fast": (0.2, 0.5),
-    "aggressive": (0.05, 0.2)
+# Port to service mapping
+PORT_SERVICES = {
+    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
+    53: "DNS", 80: "HTTP", 110: "POP3", 139: "SMB",
+    143: "IMAP", 443: "HTTPS", 445: "SMB", 3306: "MySQL",
+    3389: "RDP", 8080: "HTTP-Alt", 8443: "HTTPS-Alt"
 }
-timeout, delay_range = {
-    "whisper": (10, (5.0, 10.0)),
-    "stealth": (2, (0.5, 2.0)),
-    "fast": (1, (0.2, 0.5)),
-    "aggressive": (0.5, (0.05, 0.2))
-}[args.speed]
 
-# Port Set
-if args.ports == "common":
-    ports = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 3389, 8080]
-elif args.ports == "full":
-    ports = list(range(1, 1025))
-elif args.ports == "custom":
-    if args.custom:
-        ports = [int(p.strip()) for p in args.custom.split(',')]
-    else:
-        print(f"{RED}[-] Custom ports selected but none provided.{RESET}")
-        exit()
-else:
-    ports = [int(p.strip()) for p in args.ports.split(',')]
+# ASCII Banner
+ASCII_BANNER = f"""
+{CYAN}
+███╗   ██╗ █████╗ ██╗  ██╗██╗   ██╗██╗      █████╗ 
+████╗  ██║██╔══██╗██║ ██╔╝██║   ██║██║     ██╔══██╗
+██╔██╗ ██║███████║█████╔╝ ██║   ██║██║     ███████║
+██║╚██╗██║██╔══██║██╔═██╗ ██║   ██║██║     ██╔══██║
+██║ ╚████║██║  ██║██║  ██╗╚██████╔╝███████╗██║  ██║
+╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝
 
-# Load Targets
-targets = []
-if args.target:
-    targets.append(args.target)
-elif args.targetlist:
-    try:
-        with open(args.targetlist, 'r') as f:
-            targets = [line.strip() for line in f if line.strip()]
-    except Exception as e:
-        print(f"{RED}[-] Failed to load targets file: {e}{RESET}")
-        exit()
+        ॐ  (Om - Sacred Operator Mind)
+{RESET}v2.6 - Red Team Stealth Recon Tool
+"""
 
-# Resolve Hostnames
-resolved_targets = []
-for target in targets:
-    try:
-        ip = socket.gethostbyname(target)
-        resolved_targets.append(ip)
-    except socket.gaierror:
-        print(f"{RED}[-] Failed to resolve: {target}{RESET}")
+# Codename generator
+def generate_codename():
+    names = ["SilentFalcon", "GhostTiger", "ShadowWolf", "PhantomEagle", "SwiftViper", "DarkCobra"]
+    return random.choice(names) + str(random.randint(10,99))
 
-if not resolved_targets:
-    print(f"{RED}[-] No valid targets to scan. Exiting.{RESET}")
-    exit()
-
-# Banner Grabber
+# Banner grabbing function
 def grab_banner(ip, port):
     try:
-        sock = socket.socket()
-        sock.settimeout(2)
-        sock.connect((ip, port))
-        banner = sock.recv(1024).decode(errors="ignore").strip()
-        sock.close()
-        return banner if banner else "No Banner"
+        with socket.create_connection((ip, port), timeout=1) as s:
+            s.settimeout(1)
+            banner = s.recv(1024).decode(errors='ignore').strip()
+            return banner
     except:
-        return "No Banner"
+        return ""
 
-# Passive OS Guess (TTL Analysis)
-def guess_os(ttl_val):
-    if ttl_val <= 64:
-        return "Linux/Unix-like"
-    elif ttl_val <= 128:
+# TTL-based OS guessing
+def guess_os(ttl):
+    if ttl >= 128:
         return "Windows"
-    elif ttl_val <= 255:
-        return "Cisco/Network Device"
-    return "Unknown"
-
-# TCP Scan Function
-async def tcp_scan(ip, port):
-    pkt = IP(dst=ip, ttl=random.randint(48, 128)) / TCP(dport=port, sport=random.randint(1024,65535), flags="S")
-    if args.fragment:
-        pkt = fragment(pkt)
-    response = sr1(pkt, timeout=timeout, verbose=0)
-    await asyncio.sleep(random.uniform(*delay_range))
-
-    if response and response.haslayer(TCP):
-        flags = response.getlayer(TCP).flags
-        if flags == 0x12:
-            banner = grab_banner(ip, port)
-            os_guess = guess_os(response.ttl) if hasattr(response, 'ttl') else "Unknown"
-            print(f"{GREEN}[+] {ip}:{port} OPEN - {banner} [{os_guess}]{RESET}")
-            return {"target": ip, "port": port, "protocol": "tcp", "status": "open", "banner": banner, "os_guess": os_guess}
-    return None
-
-# UDP Scan Function
-async def udp_scan(ip, port):
-    pkt = IP(dst=ip, ttl=random.randint(48, 128)) / UDP(dport=port, sport=random.randint(1024,65535))
-    if args.fragment:
-        pkt = fragment(pkt)
-    response = sr1(pkt, timeout=timeout, verbose=0)
-    await asyncio.sleep(random.uniform(*delay_range))
-
-    if not response:
-        print(f"{GREEN}[+] {ip}:{port} UDP OPEN or FILTERED{RESET}")
-        return {"target": ip, "port": port, "protocol": "udp", "status": "open/filtered"}
-    return None
-
-# Scan Function
-async def scan_target(ip):
-    tasks = []
-    for port in ports:
-        tasks.append(asyncio.create_task(tcp_scan(ip, port)))
-        if args.udp:
-            tasks.append(asyncio.create_task(udp_scan(ip, port)))
-    results = []
-    for f in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc=f"Scanning {ip}", ncols=70):
-        result = await f
-        if result:
-            results.append(result)
-    return results
-
-# Report Writers
-def write_json_report(results):
-    folder = f"reports/{scan_start_time.strftime('%Y-%m-%d')}_{codename}"
-    os.makedirs(folder, exist_ok=True)
-    with open(f"{folder}/scan_results.json", "w") as f:
-        json.dump(results, f, indent=2)
-
-def write_markdown_report(results):
-    folder = f"reports/{scan_start_time.strftime('%Y-%m-%d')}_{codename}"
-    os.makedirs(folder, exist_ok=True)
-    with open(f"{folder}/scan_results.md", "w") as f:
-        f.write(f"# NakulaScan Report - {codename}\n")
-        f.write(f"**Date:** {scan_start_time}\n\n")
-        for r in results:
-            f.write(f"- {r['target']}:{r['port']} ({r['protocol']}) - {r['status']} - {r['banner']} - {r['os_guess']}\n")
-
-def write_html_report(results):
-    folder = f"reports/{scan_start_time.strftime('%Y-%m-%d')}_{codename}"
-    os.makedirs(folder, exist_ok=True)
-    with open(f"{folder}/scan_results.html", "w") as f:
-        f.write(f"<html><head><title>NakulaScan Report</title></head><body>")
-        f.write(f"<h1>NakulaScan Report - {codename}</h1>")
-        f.write(f"<h2>Scan Date: {scan_start_time}</h2><table border='1'><tr><th>Target</th><th>Port</th><th>Protocol</th><th>Status</th><th>Banner</th><th>OS Guess</th></tr>")
-        for r in results:
-            f.write(f"<tr><td>{r['target']}</td><td>{r['port']}</td><td>{r['protocol']}</td><td>{r['status']}</td><td>{r['banner']}</td><td>{r['os_guess']}</td></tr>")
-        f.write("</table><br><em>Om Tat Sat - Stealth in Honor of Nakula.</em></body></html>")
-
-# Main
-async def main():
-    all_results = []
-    for ip in resolved_targets:
-        print(f"{CYAN}[+] Beginning scan on {ip}...{RESET}")
-        target_results = await scan_target(ip)
-        all_results.extend(target_results)
-    if all_results:
-        write_json_report(all_results)
-        write_markdown_report(all_results)
-        write_html_report(all_results)
-        print(f"{CYAN}[+] Reports saved successfully.{RESET}")
+    elif ttl >= 64:
+        return "Linux"
     else:
-        print(f"{RED}[-] No open ports detected.{RESET}")
+        return "Unknown"
 
-if __name__ == "__main__":
+# Stealth scan engine (FIN/NULL/XMAS)
+def stealth_tcp_scan(ip, port, scan_type):
+    flags_map = {
+        "fin": "F",
+        "null": "",
+        "xmas": "FPU"
+    }
     try:
-        asyncio.run(main())
-        print(f"\n{CYAN}[*] NakulaScan Complete. {RESET}")
-        print(f"{CYAN}[*] 'He who moves without being seen is the truest warrior.' - Nakula {RESET}")
-    except KeyboardInterrupt:
-        print(f"\n{RED}[-] Scan aborted by user.{RESET}")
+        pkt = IP(dst=ip, ttl=random.randint(32,128))/TCP(dport=port, flags=flags_map[scan_type.lower()])
+        response = sr1(pkt, timeout=1, verbose=0)
+        if response is None:
+            return True  # Open (silent)
+        elif response.haslayer(TCP) and response.getlayer(TCP).flags == 0x14:
+            return False  # Closed
+    except:
+        pass
+    return None
+
+# Argument parser
+parser = argparse.ArgumentParser(description="NakulaScan - Stealth Recon Platform")
+parser.add_argument("-t", "--target", help="Target IP or hostname")
+parser.add_argument("-T", "--targetlist", help="File containing list of targets")
+parser.add_argument("-p", "--ports", choices=["common", "full"], default="common", help="Port set")
+parser.add_argument("--scan", choices=["fin", "null", "xmas"], help="Stealth scan mode")
+parser.add_argument("--nobanner", action="store_true", help="Suppress ASCII banner")
+args = parser.parse_args()
+
+if not args.nobanner:
+    print(ASCII_BANNER)
+
+codename = generate_codename()
+print(f"{CYAN}[+] Operator Codename: {codename}{RESET}")
+
+# Load targets
+if args.targetlist:
+    with open(args.targetlist, 'r') as f:
+        targets = [line.strip() for line in f if line.strip()]
+elif args.target:
+    targets = [args.target]
+else:
+    print(f"{RED}[-] No targets specified.{RESET}")
+    exit()
+
+# Port sets
+if args.ports == "common":
+    ports = list(PORT_SERVICES.keys())
+elif args.ports == "full":
+    ports = list(range(1, 1025))
+
+# Results
+results = []
+print_lock = threading.Lock()
+
+def scan_target(ip):
+    print(f"\n{CYAN}[+] Scanning {ip}...{RESET}")
+    try:
+        ans = sr1(IP(dst=ip)/ICMP(), timeout=1, verbose=0)
+        ttl = ans.ttl if ans else 0
+        os_guess = guess_os(ttl)
+    except:
+        os_guess = "Unknown"
+
+    for port in ports:
+        try:
+            status = None
+            if args.scan:
+                status = stealth_tcp_scan(ip, port, args.scan)
+                if status is None:
+                    continue
+            else:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.5)
+                result = s.connect_ex((ip, port))
+                status = result == 0
+                s.close()
+
+            if status:
+                service = PORT_SERVICES.get(port, "Unknown")
+                banner = grab_banner(ip, port) if not args.scan else ""
+                with print_lock:
+                    print(f"{GREEN}[+] {ip}:{port} OPEN ({service}) [{os_guess}] ({args.scan.upper() if args.scan else 'CONNECT'}){RESET}")
+                results.append({
+                    "ip": ip,
+                    "port": port,
+                    "status": "open",
+                    "service": service,
+                    "banner": banner,
+                    "os_guess": os_guess,
+                    "scan_type": args.scan.upper() if args.scan else "CONNECT"
+                })
+        except:
+            continue
+
+# Start threads
+threads = []
+for target in targets:
+    t = threading.Thread(target=scan_target, args=(target,))
+    t.start()
+    threads.append(t)
+    time.sleep(0.1)
+
+for t in threads:
+    t.join()
+
+# Save results
+with open("nakulascan_results.json", "w") as f:
+    json.dump(results, f, indent=4)
+
+print(f"\n{CYAN}[+] Scan complete. Results saved to nakulascan_results.json{RESET}")
